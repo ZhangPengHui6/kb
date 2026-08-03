@@ -39,5 +39,7 @@ class NodeEntry(NodeBase):
 
 if __name__ == '__main__':
     node = NodeEntry()
+    #init_state = {"local_file_path":r"C:\learn\资料\掌柜智库\11、掌柜智库01\资料\05-设备手册汇总\doc\xxx.md"}
     init_state = {"local_file_path":r"C:\learn\资料\掌柜智库\11、掌柜智库01\资料\05-设备手册汇总\doc\hak180产品安全手册.pdf"}
     result = node(init_state)
+    print( result)
