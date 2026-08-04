@@ -7,12 +7,15 @@ from collections import deque
 from pathlib import Path
 
 from langchain.chat_models import init_chat_model
+from minio.deleteobjects import DeleteObject
 
-from kb_0515.config.config import LLMConfig
+from kb_0515.config.config import LLMConfig, MinIoConfig
 from kb_0515.import_process.base import NodeBase
 from kb_0515.import_process.state import ImportGraphState
 from kb_0515.tool.json_format_tool import json_format
 from kb_0515.tool.logger import logger
+from kb_0515.tool.minio_utils import get_minio_client
+
 
 
 
@@ -115,9 +118,43 @@ class NodeMDImg(NodeBase):
             image_with_context["summary"] = res.content
         return image_with_context_list
 
+    def get_image_with_summary_and_url_list(self,image_with_context_list):
+        minio_client = get_minio_client()
+        minio_img_dir = MinIoConfig.minio_img_dir
+        minio_bucket_name = MinIoConfig.minio_bucket_name
+        image_with_summary_and_url_list = []
 
+        #删除已经存在的图片
+        old_minio_images = minio_client.list_objects(minio_bucket_name,recursive=True)
+        delete_objects = [DeleteObject(file.object_name)  for file in old_minio_images]
+        errors = minio_client.remove_objects(bucket_name=minio_bucket_name, delete_object_list=delete_objects)
+        for error in errors:
+            logger.error(error)
 
+        #遍历 在对应目录新增文件
+        for image_with_context in image_with_context_list:
+            minio_client.fput_object(bucket_name=minio_bucket_name
+                                     , object_name=f"{minio_img_dir}/{image_with_context["image_name"]}"
+                                     , file_path=image_with_context["image_path"])
 
+            image_with_summary_and_url_list.append({
+                **image_with_context
+                , "image_url": f"http://{MinIoConfig.minio_endpoint}/{minio_bucket_name}/{minio_img_dir}/{image_with_context['image_name']}"
+            })
+
+        return image_with_summary_and_url_list
+
+    def replace_md_content_image(self, md_content, md_path_obj, image_with_summary_and_url_list):
+        #替换md_content中的图片
+        #       替换内容当中的图片
+        for image_with_summary in image_with_summary_and_url_list:
+            pattern = re.compile(r"!\[.*?\]\(.*?" + re.escape(image_with_summary["image_name"]) + r"\)")
+            md_content = pattern.sub(lambda m: f"![{image_with_summary['summary']}]({image_with_summary['image_url']})",md_content)
+
+        new_md_path_obj = md_path_obj.parent / (str(md_path_obj.stem)+"_new.md")
+        with open(new_md_path_obj, "w", encoding="utf-8") as f:
+            f.write(md_content)
+        return str(new_md_path_obj), md_content
     def process(self, state: ImportGraphState):
         #1 读取获取md文件对象
         md_content,md_path_obj = self.get_md_content(state)
@@ -138,7 +175,16 @@ class NodeMDImg(NodeBase):
 
         image_with_context_list = self.get_image_with_summary_list(image_with_context_list)
 
-        return image_with_context_list
+        #连接客户端
+        image_with_summary_and_url_list = self.get_image_with_summary_and_url_list(image_with_context_list)
+
+        #替换文件和备份旧文件
+        new_md_path,md_content = self.replace_md_content_image(md_content,md_path_obj ,image_with_summary_and_url_list)
+        return {
+            "md_content": md_content,
+            "new_md_path": new_md_path,
+        }
+
 
 if __name__ == '__main__':
     node = NodeMDImg()
