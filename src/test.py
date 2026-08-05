@@ -1,14 +1,11 @@
-# atguigu/test/01_env和系统环境变量的优先级.py
-
-import os
-from dotenv import load_dotenv
-
-# 加载.env文件
-load_dotenv()
-
-print(os.getenv("OPENAI_API_KEY"))
-
-# 示例：假设系统有环境变量 MY_KEY=system_val，.env里 MY_KEY=dotenv_val
-print(os.getenv("MY_KEY"))
-# load_dotenv() → 输出 system_val（系统优先级高）
-# load_dotenv(override=True) → 输出 dotenv_val（.env覆盖系统）
+import re
+stripped_line = "````123~~~abc```````"
+code_block_marker_match = re.match(r'^(`{3,}|~{3,}).*?(`{3,}|~{3,}).*?(`{3,}|~{3,})$', stripped_line)
+if code_block_marker_match:
+    marker1 = code_block_marker_match.group(1)
+    marker2 = code_block_marker_match.group(2)
+    marker3 = code_block_marker_match.group(3)
+    print("\n原有方法结果:")
+    print(f"标记1: {marker1}")
+    print(f"标记1: {marker2}")
+    print(f"标记1: {marker3}")
